@@ -4,8 +4,6 @@ import io
 import json
 import os
 import sys
-import threading
-import time
 from threading import Lock
 from pathlib import Path
 from typing import Union
@@ -15,6 +13,9 @@ from flask import Flask, render_template, request, send_file
 from TTS.config import load_config
 from TTS.utils.manage import ModelManager
 from TTS.utils.synthesizer import Synthesizer
+
+from functools import lru_cache
+from timeit import repeat
 
 
 def create_argparser():
@@ -170,10 +171,16 @@ def details():
         args=args.__dict__,
     )
 
-
 lock = Lock()
 @app.route("/api/tts", methods=["GET"])
 def tts():
+    return handle_request(request, False)
+
+@app.route("/api/cached/tts", methods=["GET"])
+def ttschached():
+    return handle_request(request, True)
+
+def handle_request(request, use_cache):
     lock.acquire()
     text = request.args.get("text")
     speaker_idx = request.args.get("speaker_id", "")
@@ -181,12 +188,21 @@ def tts():
     style_wav = style_wav_uri_to_dict(style_wav)
     print(" > Model input: {}".format(text))
     print(" > Speaker Idx: {}".format(speaker_idx))
-    wavs = synthesizer.tts(text, speaker_name=speaker_idx, style_wav=style_wav)
+
+    if use_cache:
+        wavs = cachedTts(text, speaker_name=speaker_idx, style_wav=style_wav)
+    else:
+        wavs = synthesizer.tts(text, speaker_name=speaker_idx, style_wav=style_wav)
+
     out = io.BytesIO()
     synthesizer.save_wav(wavs, out)
-    result = send_file(out, mimetype="audio/wav", cache_timeout=100)
     lock.release()
-    return result
+
+    return send_file(out, mimetype="audio/wav")
+
+@lru_cache(maxsize=256)
+def cachedTts(text, speaker_name, style_wav):
+    return synthesizer.tts(text, speaker_name, style_wav)
 
 def main():
     app.run(debug=args.debug, host="::", port=args.port)
