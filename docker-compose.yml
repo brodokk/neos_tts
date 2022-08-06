@@ -2,7 +2,7 @@ version: "3.2"
 
 services:
         coqui-ai-tts:
-                image: ghcr.io/coqui-ai/tts-cpu:5094499eba440efd41031ad8d7739c4b49c6045b
+                build: .
                 command: --model_name tts_models/en/ljspeech/tacotron2-DDC_ph
                 entrypoint: tts-server
                 volumes:

@@ -17,6 +17,8 @@ from TTS.utils.synthesizer import Synthesizer
 from functools import lru_cache
 from timeit import repeat
 
+from fenkeysmanagement import KeyManager
+
 
 def create_argparser():
     def convert_boolean(x):
@@ -122,6 +124,7 @@ use_multi_speaker = hasattr(synthesizer.tts_model, "num_speakers") and (
 speaker_manager = getattr(synthesizer.tts_model, "speaker_manager", None)
 # TODO: set this from SpeakerManager
 use_gst = synthesizer.tts_config.get("use_gst", False)
+key_manager = KeyManager()
 app = Flask(__name__)
 
 
@@ -143,17 +146,20 @@ def style_wav_uri_to_dict(style_wav: str) -> Union[str, dict]:
         return style_wav  # style_wav is a gst dictionary with {token1_id : token1_weigth, ...}
     return None
 
+def check_perms(request):
+    auth_key = request.args.get("auth_key")
+    if not auth_key:
+        return False
+    key_manager.reload_keys()
+    if not key_manager.key_revoked(auth_key):
+        return True
+    return False
 
 @app.route("/")
 def index():
-    return render_template(
-        "index.html",
-        show_details=args.show_details,
-        use_multi_speaker=use_multi_speaker,
-        speaker_ids=speaker_manager.ids if speaker_manager is not None else None,
-        use_gst=use_gst,
-    )
-
+    return """
+    TTS server customized by Kyubii and Brodokk for NeosVR.
+    """
 
 @app.route("/details")
 def details():
@@ -174,10 +180,14 @@ def details():
 lock = Lock()
 @app.route("/api/tts", methods=["GET"])
 def tts():
+    if not check_perms(request):
+        return "error auth", 403
     return handle_request(request, False)
 
 @app.route("/api/cached/tts", methods=["GET"])
 def ttschached():
+    if not check_perms(request):
+        return "error auth", 403
     return handle_request(request, True)
 
 def handle_request(request, use_cache):
