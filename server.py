@@ -17,6 +17,8 @@ from TTS.utils.synthesizer import Synthesizer
 from functools import lru_cache
 from timeit import repeat
 
+import soundfile as sf
+
 from fenkeysmanagement import KeyManager
 
 
@@ -193,6 +195,7 @@ def ttschached():
 def handle_request(request, use_cache):
     lock.acquire()
     text = request.args.get("text")
+    output_format = request.args.get("format", "ogg")
     speaker_idx = request.args.get("speaker_id", "")
     style_wav = request.args.get("style_wav", "")
     style_wav = style_wav_uri_to_dict(style_wav)
@@ -204,11 +207,19 @@ def handle_request(request, use_cache):
     else:
         wavs = synthesizer.tts(text, speaker_name=speaker_idx, style_wav=style_wav)
 
+    wav_out = io.BytesIO()
     out = io.BytesIO()
-    synthesizer.save_wav(wavs, out)
+    synthesizer.save_wav(wavs, wav_out)
+    if output_format == "ogg":
+        data, samplerate = sf.read(wav_out)
+        sf.write(out, data, samplerate, format=output_format)
+        output_format="audio/ogg"
+    else:
+        out = wav_out
+        output_format="audio/wav"
     lock.release()
 
-    return send_file(out, mimetype="audio/wav")
+    return send_file(out, mimetype=output_format)
 
 @lru_cache(maxsize=256)
 def cachedTts(text, speaker_name, style_wav):

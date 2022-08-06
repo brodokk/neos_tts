@@ -23,3 +23,7 @@ Quick example with curl, don't forget to use the `AUTH KEY` generated before.
 ```
 curl -v "https://tts.neos.spacealicorn.network/api/cached/tts?text=uwu&speaker_id=&style_wav=&auth_key=<AUTH KEY>" --output /dev/null
 ```
+
+# Bugs
+
+Firefox don't seems to like the ogg file, please use wav for now or use a chrome based webrowser.
