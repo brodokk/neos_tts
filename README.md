@@ -10,11 +10,20 @@ docker-compose up --build
 
 ## Configuration
 
+### API
+
 You need to configure create at least one `AUTH KEY` for use the API. Use the `fenkm` command:
 
 ```
 fenkm genkey
 ```
+
+### Admin
+
+For access to the admin you will need to setup the following keys in the file `config.toml`:
+
+- `SQLALCHEMY_DATABASE_URI`: database for statistics
+- `ADMIN_KEY`: key for acces to the `/admin` endpoints
 
 ## Final usage
 
@@ -26,11 +35,17 @@ curl -v "https://tts.neos.spacealicorn.network/api/cached/tts?text=uwu&speaker_i
 
 ### Parameters
 
+for `/api` endpoints:
+
 - `auth_key`: the auth key
 - `text`: The text you want to convert in audio
 - `speaker_id`:
 - `style_wav`:
 - `format`: Default to `ogg`. Other supported format: `wav`
+
+for `/admin` endpoints:
+
+- `admin_key`: The admin key set in the config key `ADMIN_KEY`
 
 # Know bugs
 

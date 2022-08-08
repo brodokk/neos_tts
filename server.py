@@ -4,11 +4,13 @@ import io
 import json
 import os
 import sys
+import toml
 from threading import Lock
 from pathlib import Path
 from typing import Union
 
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, abort
+from flask import url_for as flask_url_for
 
 from TTS.config import load_config
 from TTS.utils.manage import ModelManager
@@ -21,6 +23,8 @@ import soundfile as sf
 
 from fenkeysmanagement import KeyManager
 
+from flask_sqlalchemy import SQLAlchemy
+from flask_statistics import Statistics
 
 def create_argparser():
     def convert_boolean(x):
@@ -127,7 +131,51 @@ speaker_manager = getattr(synthesizer.tts_model, "speaker_manager", None)
 # TODO: set this from SpeakerManager
 use_gst = synthesizer.tts_config.get("use_gst", False)
 key_manager = KeyManager()
+
 app = Flask(__name__)
+
+app.config.from_file("config.toml", load=toml.load)
+for mandatory_key in ['SQLALCHEMY_DATABASE_URI', 'ADMIN_KEY']:
+    if not app.config.get(mandatory_key):
+        raise ValueError("{} cannot be empty".format(mandatory_key))
+
+db = SQLAlchemy(app)
+
+class Request(db.Model):
+    __tablename__ = "request"
+
+    index = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    response_time = db.Column(db.Float)
+    date = db.Column(db.DateTime)
+    method = db.Column(db.String)
+    size = db.Column(db.Integer)
+    status_code = db.Column(db.Integer)
+    path = db.Column(db.String)
+    user_agent = db.Column(db.String)
+    remote_address = db.Column(db.String)
+    exception = db.Column(db.String)
+    referrer = db.Column(db.String)
+    browser = db.Column(db.String)
+    platform = db.Column(db.String)
+    mimetype = db.Column(db.String)
+
+db.create_all()
+
+def invalid_auth():
+    abort(403)
+
+def check_admin_auth():
+    key = request.args.get("admin_key", None)
+    if key != app.config.get('ADMIN_KEY'):
+        abort(403)
+
+def url_for(endpoint, **values):
+    values['admin_key'] = app.config.get('ADMIN_KEY')
+    return flask_url_for(endpoint, **values)
+
+app.jinja_env.globals['url_for'] = url_for
+
+statistics = Statistics(app, db, Request, check_admin_auth, '/admin/statistics')
 
 
 def style_wav_uri_to_dict(style_wav: str) -> Union[str, dict]:
@@ -163,11 +211,12 @@ def index():
     TTS server customized by Kyubii and Brodokk for NeosVR.
     """
 
-@app.route("/details")
+@app.route("/admin/details")
 def details():
-    model_config = load_config(args.tts_config)
-    if args.vocoder_config is not None and os.path.isfile(args.vocoder_config):
-        vocoder_config = load_config(args.vocoder_config)
+    check_admin_auth()
+    model_config = load_config(config_path)
+    if vocoder_config_path is not None and os.path.isfile(vocoder_config_path):
+        vocoder_config = load_config(vocoder_config_path)
     else:
         vocoder_config = None
 
@@ -183,13 +232,13 @@ lock = Lock()
 @app.route("/api/tts", methods=["GET"])
 def tts():
     if not check_perms(request):
-        return "error auth", 403
+        return invalid_auth()
     return handle_request(request, False)
 
 @app.route("/api/cached/tts", methods=["GET"])
 def ttschached():
     if not check_perms(request):
-        return "error auth", 403
+        return invalid_auth()
     return handle_request(request, True)
 
 def handle_request(request, use_cache):

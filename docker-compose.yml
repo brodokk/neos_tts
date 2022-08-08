@@ -3,9 +3,11 @@ version: "3.2"
 services:
         coqui-ai-tts:
                 build: .
-                command: --model_name tts_models/en/ljspeech/tacotron2-DDC_ph
+                command: --model_name tts_models/en/ljspeech/tacotron2-DDC_ph --show_details=true
                 entrypoint: tts-server
                 volumes:
                         - "./server.py:/root/TTS/server/server.py"
+                        - "./keyfile.json:/root/keyfile.json"
+                        - "./config.toml:/root/TTS/server/config.toml"
                 ports:
                         - "5005:5002"
