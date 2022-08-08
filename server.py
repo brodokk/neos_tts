@@ -15,9 +15,9 @@ from TTS.utils.manage import ModelManager
 from TTS.utils.synthesizer import Synthesizer
 
 from functools import lru_cache
-from timeit import repeat
 
-import soundfile as sf
+from pydub import AudioSegment
+from flask import jsonify
 
 from fenkeysmanagement import KeyManager
 
@@ -184,46 +184,41 @@ lock = Lock()
 def tts():
     if not check_perms(request):
         return "error auth", 403
-    return handle_request(request, False)
+    return handle_request(request)
 
-@app.route("/api/cached/tts", methods=["GET"])
-def ttschached():
-    if not check_perms(request):
-        return "error auth", 403
-    return handle_request(request, True)
 
-def handle_request(request, use_cache):
-    lock.acquire()
-    text = request.args.get("text")
-    output_format = request.args.get("format", "ogg")
-    speaker_idx = request.args.get("speaker_id", "")
-    style_wav = request.args.get("style_wav", "")
-    style_wav = style_wav_uri_to_dict(style_wav)
-    print(" > Model input: {}".format(text))
-    print(" > Speaker Idx: {}".format(speaker_idx))
+def handle_request(request):
+    with lock:
+        text = request.args.get("text")
+        speaker_idx = request.args.get("speaker_id", "")
+        style_wav = request.args.get("style_wav", "")
+        use_cache = request.args.get("use_cache", "false")
+        style_wav = style_wav_uri_to_dict(style_wav)
+        print(" > Model input: {}".format(text))
+        print(" > Speaker Idx: {}".format(speaker_idx))
 
-    if use_cache:
-        wavs = cachedTts(text, speaker_name=speaker_idx, style_wav=style_wav)
-    else:
-        wavs = synthesizer.tts(text, speaker_name=speaker_idx, style_wav=style_wav)
+        if use_cache == "true":
+            out = cached_TTS(text, speaker_name=speaker_idx, style_wav=style_wav)
+            print("LRU cache stats: {}".format(cached_TTS.cache_info()))
+        else:
+            out = TTS(text, speaker_name=speaker_idx, style_wav=style_wav)
 
+        return send_file(io.BytesIO(out), mimetype="audio/ogg")
+
+@lru_cache(maxsize=512)
+def cached_TTS(text, speaker_name, style_wav):
+    return TTS(text, speaker_name, style_wav)
+
+def TTS(text, speaker_name, style_wav):
+    wavs = synthesizer.tts(text, speaker_name, style_wav)
     wav_out = io.BytesIO()
     out = io.BytesIO()
     synthesizer.save_wav(wavs, wav_out)
-    if output_format == "ogg":
-        data, samplerate = sf.read(wav_out)
-        sf.write(out, data, samplerate, format=output_format)
-        output_format="audio/ogg"
-    else:
-        out = wav_out
-        output_format="audio/wav"
-    lock.release()
-
-    return send_file(out, mimetype=output_format)
-
-@lru_cache(maxsize=256)
-def cachedTts(text, speaker_name, style_wav):
-    return synthesizer.tts(text, speaker_name, style_wav)
+    wav_out.seek(0)
+    audio = AudioSegment.from_file_using_temporary_files(wav_out)
+    audio.export(out, format="ogg")
+    out.seek(0)
+    return out.read()
 
 def main():
     app.run(debug=args.debug, host="::", port=args.port)
