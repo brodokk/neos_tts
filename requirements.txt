@@ -1,6 +1,6 @@
 tabulate
 fenkeysmanagement
 soundfile
-#pydub
+pydub
 flask-sqlalchemy
 git+https://github.com/brodokk/flask-statistics@a742924c10b491fe9f0d5c994821a89bb1317a8c#egg=flask-statistics
