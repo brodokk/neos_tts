@@ -39,9 +39,8 @@ for `/api` endpoints:
 
 - `auth_key`: the auth key
 - `text`: The text you want to convert in audio
-- `speaker_id`:
-- `style_wav`:
-- `format`: Default to `ogg`. Other supported format: `wav`
+- `speaker_id`: Id of the voice to use
+- `use_cache`: Use the cache, default to true.
 
 for `/admin` endpoints:
 
