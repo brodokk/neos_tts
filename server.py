@@ -239,7 +239,7 @@ def handle_request(request):
         text = request.args.get("text")
         speaker_idx = request.args.get("speaker_id", "")
         style_wav = request.args.get("style_wav", "")
-        use_cache = request.args.get("use_cache", "false")
+        use_cache = request.args.get("use_cache", "true")
         style_wav = style_wav_uri_to_dict(style_wav)
         print(" > Model input: {}".format(text))
         print(" > Speaker Idx: {}".format(speaker_idx))
