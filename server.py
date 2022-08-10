@@ -138,6 +138,9 @@ for mandatory_key in ['SQLALCHEMY_DATABASE_URI', 'ADMIN_KEY']:
     if not app.config.get(mandatory_key):
         raise ValueError("{} cannot be empty".format(mandatory_key))
 
+class TTSException(Exception):
+    pass
+
 db = SQLAlchemy(app)
 
 class Request(db.Model):
@@ -232,7 +235,10 @@ lock = Lock()
 def tts():
     if not check_perms(request):
         return invalid_auth()
-    return handle_request(request)
+    try:
+        return handle_request(request)
+    except TTSException as exc:
+        return str(exc), 500
 
 def handle_request(request):
     with lock:
@@ -245,7 +251,10 @@ def handle_request(request):
         print(" > Speaker Idx: {}".format(speaker_idx))
 
         if use_cache:
-            out = cached_TTS(text, speaker_name=speaker_idx, style_wav=style_wav)
+            try:
+                out = cached_TTS(text, speaker_name=speaker_idx, style_wav=style_wav)
+            except ValueError as exc:
+                raise TTSException('{} is not a correct speaker_id'.format(exc))
             print("LRU cache stats: {}".format(cached_TTS.cache_info()))
         else:
             out = TTS(text, speaker_name=speaker_idx, style_wav=style_wav)
@@ -257,7 +266,10 @@ def cached_TTS(text, speaker_name, style_wav):
     return TTS(text, speaker_name, style_wav)
 
 def TTS(text, speaker_name, style_wav):
-    wavs = synthesizer.tts(text, speaker_name, style_wav)
+    try:
+        wavs = synthesizer.tts(text, speaker_name, style_wav)
+    except KeyError as exc:
+        raise TTSException('{} is not a correct speaker_id'.format(exc))
     wav_out = io.BytesIO()
     out = io.BytesIO()
     synthesizer.save_wav(wavs, wav_out)
